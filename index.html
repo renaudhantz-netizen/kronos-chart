@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SOL · 1h · 72h</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #131722; font-family: -apple-system, BlinkMacSystemFont, sans-serif; overflow: hidden; }
+  #wrap-main { position: relative; }
+  #wrap-cdur { position: relative; border-top: 1px solid #2a2e39; }
+  #tl { position: absolute; top: 10px; left: 16px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
+  #asset-picker { position: relative; width: 150px; }
+  #asset-input { width: 100%; background: #1e2433; color: #d1d4dc; border: 1px solid #2a2e39; padding: 3px 8px; font-size: 13px; font-weight: 600; border-radius: 3px; font-family: inherit; outline: none; cursor: pointer; letter-spacing: .5px; }
+  #asset-input:focus { border-color: #555; cursor: text; }
+  #asset-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; width: 180px; max-height: 260px; overflow-y: auto; background: #1e2433; border: 1px solid #2a2e39; border-radius: 3px; z-index: 30; box-shadow: 0 6px 16px rgba(0,0,0,.6); }
+  #asset-dropdown::-webkit-scrollbar { width: 5px; } #asset-dropdown::-webkit-scrollbar-thumb { background: #2a2e39; border-radius: 3px; }
+  .asset-item { padding: 5px 10px; color: #d1d4dc; font-size: 12px; cursor: pointer; }
+  .asset-item:hover, .asset-item.cur { background: #2a2e39; }
+  .asset-item.cur { color: #26a69a; }
+  #hud-status { color: #e0e3eb; font-size: 11px; pointer-events: none; }
+  #hud-status.error { color: #ef5350; }
+  .sub-label { position: absolute; top: 4px; left: 8px; z-index: 10; color: #e0e3eb; font-size: 10px; pointer-events: none; }
+  #toolbar { position: absolute; top: 10px; right: 16px; z-index: 10; display: flex; gap: 2px; }
+  .tf-btn { background: transparent; color: #787b86; border: 1px solid #2a2e39; padding: 2px 8px; cursor: pointer; font-size: 11px; border-radius: 3px; font-family: inherit; transition: color .15s, background .15s; }
+  .tf-btn:hover { color: #d1d4dc; border-color: #555; }
+  .tf-btn.active { color: #d1d4dc; background: #2a2e39; border-color: #2a2e39; }
+</style>
+</head>
+<body>
+<div id="wrap-main">
+  <div id="tl">
+    <div id="asset-picker">
+      <input type="text" id="asset-input" autocomplete="off" spellcheck="false">
+      <div id="asset-dropdown"></div>
+    </div>
+    <span id="hud-status">Loading…</span>
+  </div>
+  <div id="chart-main"></div>
+  <div id="toolbar">
+    <button class="tf-btn" data-tf="5m">5m</button>
+    <button class="tf-btn" data-tf="15m">15m</button>
+    <button class="tf-btn" data-tf="1h">1H</button>
+    <button class="tf-btn" data-tf="2h">2H</button>
+    <button class="tf-btn" data-tf="4h">4H</button>
+    <button class="tf-btn" data-tf="1d">1D</button>
+    <button class="tf-btn" data-tf="1w">1W</button>
+  </div>
+</div>
+<div id="wrap-cdur">
+  <span class="sub-label"><span style="color:#26C6DA">CDUR Court</span> &nbsp;·&nbsp; <span style="color:#FF7043">CDUR Long</span></span>
+  <div id="chart-cdur"></div>
+</div>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  const COIN = "SOL";
+  const INTERVAL = "1h";
+  const HOURS_MS = 259200000;
+  const REFRESH_MS = 60000;
+  const API_URL = 'https://api.hyperliquid.xyz/info';
+  const MARKERS = [];  // Pas de marqueur de position fixe
+  const DISPLAY_START = null;  // Calculé dynamiquement au refresh
+  const WARMUP_MS = 1728000000;
+
+  const TF_HOURS = {'1m':1/60,'3m':3/60,'5m':5/60,'15m':.25,'30m':.5,'1h':1,'2h':2,'4h':4,'8h':8,'12h':12,'1d':24,'1w':168};
+  const TF_REFRESH = {'5m':15000,'15m':30000,'1h':60000,'2h':60000,'4h':120000,'1d':300000,'1w':300000};
+  const TF_DEFAULT_HOURS_MS = {'5m':24*3.6e6,'15m':72*3.6e6,'1h':168*3.6e6,'2h':336*3.6e6,'4h':720*3.6e6,'1d':4320*3.6e6,'1w':8736*3.6e6};
+  const TF_SECS = {'1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,'1h':3600,'2h':7200,'4h':14400,'8h':28800,'12h':43200,'1d':86400,'1w':604800};
+  // ── URL params : ?coin=SOL&tf=4h pour liens directs (Telegram, etc.) ──
+  const _params = new URLSearchParams(window.location.search);
+  const _validTf = ['5m','15m','1h','2h','4h','1d','1w'];
+  const _urlCoin = (_params.get('coin') || '').toUpperCase().trim();
+  const _urlTf = (_params.get('tf') || '').toLowerCase().trim();
+
+  let currentCoin = _urlCoin || COIN;
+  let currentTf = _validTf.includes(_urlTf) ? _urlTf : INTERVAL;
+  let currentHoursMs = TF_DEFAULT_HOURS_MS[currentTf] ?? HOURS_MS;
+  document.title = currentCoin + ' · ' + currentTf;
+  document.getElementById('asset-input').value = currentCoin;
+  const warmupMs = tf => Math.round(480 * (TF_HOURS[tf] ?? 1) * 3600000);
+
+  const mainH = () => Math.floor(window.innerHeight * 0.68);
+  const cdurH = () => Math.floor(window.innerHeight * 0.32);
+
+  const TF_OPTS = {
+    borderColor: '#2a2e39', timeVisible: true, secondsVisible: false,
+    tickMarkFormatter: (ts, type) => {
+      const d = new Date(ts * 1000);
+      if (type <= 2) return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
+      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
+    },
+  };
+  const LOC_OPTS = {
+    timeFormatter: (ts) => new Date(ts * 1000).toLocaleString(undefined, {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: false,
+    }),
+  };
+
+  const mainChart = LightweightCharts.createChart(document.getElementById('chart-main'), {
+    width: window.innerWidth, height: mainH(),
+    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
+    grid: { vertLines: { color: '#1e2433' }, horzLines: { color: '#1e2433' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#2a2e39' },
+    timeScale: TF_OPTS,
+    localization: LOC_OPTS,
+  });
+
+  const cdurChart = LightweightCharts.createChart(document.getElementById('chart-cdur'), {
+    width: window.innerWidth, height: cdurH(),
+    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#e0e3eb' },
+    grid: { vertLines: { color: '#1e2433' }, horzLines: { color: '#1e2433' } },
+    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+    rightPriceScale: { borderColor: '#2a2e39' },
+    timeScale: TF_OPTS,
+    localization: LOC_OPTS,
+    handleScroll: false,
+    handleScale: false,
+  });
+
+  // Sync time scales
+  let syncLock = false;
+  function onRange(range, targets) {
+    if (syncLock || !range) return;
+    syncLock = true;
+    targets.forEach(t => t.timeScale().setVisibleLogicalRange(range));
+    syncLock = false;
+  }
+  mainChart.timeScale().subscribeVisibleLogicalRangeChange(r => onRange(r, [cdurChart]));
+  cdurChart.timeScale().subscribeVisibleLogicalRangeChange(r => onRange(r, [mainChart]));
+
+  window.addEventListener('resize', () => {
+    const w = window.innerWidth;
+    mainChart.applyOptions({ width: w, height: mainH() });
+    cdurChart.applyOptions({ width: w, height: cdurH() });
+  });
+
+  // ── Main chart series ──────────────────────────────────────────────────────
+  const candleSeries = mainChart.addCandlestickSeries({
+    upColor: '#26a69a', downColor: '#ef5350',
+    borderVisible: false,
+    wickUpColor: '#26a69a', wickDownColor: '#ef5350',
+    priceFormat: {
+      type: 'custom',
+      formatter: p => p >= 100 ? Math.round(p).toLocaleString() : p >= 0.1 ? p.toFixed(2) : p.toPrecision(4),
+      minMove: 0.01,
+    },
+  });
+  const volumeSeries = mainChart.addHistogramSeries({
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume',
+  });
+  mainChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  function toChartData(data) {
+    const cs = data.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
+    const vs = data.map(c => ({
+      time: c.time, value: c.volume,
+      color: c.close >= c.open ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)',
+    }));
+    return { cs, vs };
+  }
+
+  function makeLine(color, style) {
+    return mainChart.addLineSeries({
+      color, lineWidth: 1, lineStyle: style ?? 0,
+      priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    });
+  }
+
+  const S = LightweightCharts.LineStyle;
+  const sma10 = makeLine('#66BB6A');
+  const sma30 = makeLine('#FFCA28');
+  const sma50 = makeLine('#EC407A');
+  const bb20U  = makeLine('#42A5F5');
+  const bb20M  = makeLine('#42A5F5', S.Dashed);
+  const bb20L  = makeLine('#42A5F5');
+  const bb200U = makeLine('#FFA726', S.Dashed);
+  const bb200M = makeLine('#FFA726', S.Dashed);
+  const bb200L = makeLine('#FFA726', S.Dashed);
+
+  // ── Pivot point series ─────────────────────────────────────────────────────
+  function makePivLine() {
+    return mainChart.addLineSeries({
+      color: '#888888', lineWidth: 1, lineStyle: S.Dashed,
+      priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+    });
+  }
+  const pivR3 = makePivLine();
+  const pivR2 = makePivLine();
+  const pivR1 = makePivLine();
+  const pivPP = makePivLine();
+  const pivS1 = makePivLine();
+  const pivS2 = makePivLine();
+  const pivS3 = makePivLine();
+
+  // ── CDUR oscillator series ─────────────────────────────────────────────────
+  function makeOscSeries(chart, color) {
+    const s = chart.addLineSeries({
+      color, lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: true,
+      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+    });
+    s.createPriceLine({ price: 80, color: '#ef5350', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: true });
+    s.createPriceLine({ price: 50, color: '#444444', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: false });
+    s.createPriceLine({ price: 20, color: '#26a69a', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: true });
+    return s;
+  }
+  const cdurCourtSeries = makeOscSeries(cdurChart, '#26C6DA');
+  const cdurLongSeries  = cdurChart.addLineSeries({
+    color: '#FF7043', lineWidth: 1,
+    priceLineVisible: false, lastValueVisible: true,
+    autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
+  });
+
+  // ── Indicator calculations ─────────────────────────────────────────────────
+  function calcSMA(data, period) {
+    const out = [];
+    for (let i = period - 1; i < data.length; i++) {
+      const sum = data.slice(i - period + 1, i + 1).reduce((s, c) => s + c.close, 0);
+      out.push({ time: data[i].time, value: sum / period });
+    }
+    return out;
+  }
+
+  function pivotPeriodSec(tf) {
+    if (['1d','3d'].includes(tf)) return 7 * 86400;
+    if (tf === '1w') return 30 * 86400;
+    return 86400; // intraday → daily pivots
+  }
+
+  function calcPivots(data, tf) {
+    const pSec = pivotPeriodSec(tf);
+    const g = new Map();
+    for (const c of data) {
+      const k = Math.floor(c.time / pSec);
+      if (!g.has(k)) g.set(k, {O:c.open, H:c.high, L:c.low, C:c.close, t:k*pSec});
+      else { const d=g.get(k); d.H=Math.max(d.H,c.high); d.L=Math.min(d.L,c.low); d.C=c.close; }
+    }
+    const days = [...g.values()].sort((a,b)=>a.t-b.t);
+    const R = {PP:[],R1:[],R2:[],R3:[],S1:[],S2:[],S3:[]};
+    for (let i=1;i<days.length;i++) {
+      const {O,H,L,C}=days[i-1], t=days[i].t;
+      const PP=(H+L+C+O)/4;
+      R.PP.push({time:t,value:PP});
+      R.R1.push({time:t,value:2*PP-L});
+      R.R2.push({time:t,value:PP+(H-L)});
+      R.R3.push({time:t,value:H+2*(PP-L)});
+      R.S1.push({time:t,value:2*PP-H});
+      R.S2.push({time:t,value:PP-(H-L)});
+      R.S3.push({time:t,value:L-2*(H-PP)});
+    }
+    return R;
+  }
+
+  function calcBB(data, period, mult) {
+    const upper = [], middle = [], lower = [];
+    for (let i = period - 1; i < data.length; i++) {
+      const closes = data.slice(i - period + 1, i + 1).map(c => c.close);
+      const mean = closes.reduce((a, b) => a + b, 0) / period;
+      const std = Math.sqrt(closes.reduce((s, c) => s + (c - mean) ** 2, 0) / period);
+      const t = data[i].time;
+      upper.push({ time: t, value: mean + mult * std });
+      middle.push({ time: t, value: mean });
+      lower.push({ time: t, value: mean - mult * std });
+    }
+    return { upper, middle, lower };
+  }
+
+  function calcEMA(vals, period) {
+    const k = 2 / (period + 1);
+    const out = [];
+    let prev = null;
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      if (v === null || v === undefined || isNaN(v)) { out.push(null); continue; }
+      prev = prev === null ? v : v * k + prev * (1 - k);
+      out.push(prev);
+    }
+    return out;
+  }
+
+  function calcDEMA(vals, period) {
+    const e1 = calcEMA(vals, period);
+    const e2 = calcEMA(e1, period);
+    return vals.map((_, i) => (e1[i] !== null && e2[i] !== null) ? 2 * e1[i] - e2[i] : null);
+  }
+
+  function calcRSI(vals, period) {
+    const out = new Array(vals.length).fill(null);
+    let ag = 0, al = 0, count = 0, seeded = false, prevV = null;
+    for (let i = 0; i < vals.length; i++) {
+      const v = vals[i];
+      if (v === null || isNaN(v)) { prevV = null; continue; }
+      if (prevV === null) { prevV = v; continue; }
+      const d = v - prevV; prevV = v;
+      const g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
+      if (!seeded) {
+        ag += g; al += l;
+        if (++count === period) {
+          ag /= period; al /= period; seeded = true;
+          out[i] = al === 0 ? (ag === 0 ? 50 : 100) : 100 - 100 / (1 + ag / al);
+        }
+      } else {
+        ag = (ag * (period - 1) + g) / period;
+        al = (al * (period - 1) + l) / period;
+        out[i] = al === 0 ? (ag === 0 ? 50 : 100) : 100 - 100 / (1 + ag / al);
+      }
+    }
+    return out;
+  }
+
+  function calcCDURCourt(data) {
+    const cl = data.map(c => c.close);
+    const d15 = calcDEMA(cl, 15), d30 = calcDEMA(cl, 30);
+    const diff = cl.map((_, i) => d15[i] !== null && d30[i] !== null ? d15[i] - d30[i] : null);
+    return calcRSI(calcDEMA(diff, 7), 4);
+  }
+
+  function calcCDURLong(data) {
+    const cl = data.map(c => c.close);
+    const d25 = calcDEMA(cl, 25), d240 = calcDEMA(cl, 240);
+    const diff = cl.map((_, i) => d25[i] !== null && d240[i] !== null ? d25[i] - d240[i] : null);
+    return calcRSI(calcDEMA(diff, 7), 6);
+  }
+
+  // ── Crosshair sync ────────────────────────────────────────────────────────
+  let closeMap = new Map(), courtMap = new Map();
+  let xhairLock = false;
+  mainChart.subscribeCrosshairMove(param => {
+    if (xhairLock) return;
+    if (!param.time) { cdurChart.clearCrosshairPosition(); return; }
+    xhairLock = true;
+    cdurChart.setCrosshairPosition(courtMap.get(param.time) ?? 50, param.time, cdurCourtSeries);
+    xhairLock = false;
+  });
+  cdurChart.subscribeCrosshairMove(param => {
+    if (xhairLock) return;
+    if (!param.time) { mainChart.clearCrosshairPosition(); return; }
+    xhairLock = true;
+    mainChart.setCrosshairPosition(closeMap.get(param.time) ?? 0, param.time, candleSeries);
+    xhairLock = false;
+  });
+
+  // ── Apply all indicators ───────────────────────────────────────────────────
+  function applyData(data, dispStart) {
+    dispStart = dispStart ?? DISPLAY_START;
+    const disp = dispStart ? data.filter(c => c.time >= dispStart) : data;
+    const { cs, vs } = toChartData(disp);
+    candleSeries.setData(cs);
+    volumeSeries.setData(vs);
+    if (MARKERS.length) candleSeries.setMarkers(MARKERS);
+    const clip = (arr) => dispStart ? arr.filter(p => p.time >= dispStart) : arr;
+    sma10.setData(clip(calcSMA(data, 10)));
+    sma30.setData(clip(calcSMA(data, 30)));
+    sma50.setData(clip(calcSMA(data, 50)));
+    const b20 = calcBB(data, 20, 2);
+    bb20U.setData(clip(b20.upper)); bb20M.setData(clip(b20.middle)); bb20L.setData(clip(b20.lower));
+    const b200 = calcBB(data, 200, 2);
+    bb200U.setData(clip(b200.upper)); bb200M.setData(clip(b200.middle)); bb200L.setData(clip(b200.lower));
+    const piv = calcPivots(data, currentTf);
+    const iSec = TF_SECS[currentTf] ?? 3600;
+    const lastCandle = disp.length ? disp[disp.length - 1] : null;
+    const futureT = (lastCandle ? lastCandle.time : 0) + 5 * iSec;
+    const mkSeg = arr => {
+      if (!arr.length) return [];
+      const last = arr[arr.length - 1];
+      return [{time: last.time, value: last.value}, {time: futureT, value: last.value}];
+    };
+    pivPP.setData(mkSeg(piv.PP)); pivR1.setData(mkSeg(piv.R1)); pivR2.setData(mkSeg(piv.R2)); pivR3.setData(mkSeg(piv.R3));
+    pivS1.setData(mkSeg(piv.S1)); pivS2.setData(mkSeg(piv.S2)); pivS3.setData(mkSeg(piv.S3));
+    const times = data.map(c => c.time);
+    const toPts = vals => vals
+      .map((v, i) => (v !== null && !isNaN(v) && times[i] >= dispStart) ? { time: times[i], value: v } : null)
+      .filter(Boolean);
+    const courtPts = toPts(calcCDURCourt(data));
+    const longPts  = toPts(calcCDURLong(data));
+    cdurCourtSeries.setData(courtPts);
+    cdurLongSeries.setData(longPts);
+    closeMap = new Map(cs.map(c => [c.time, c.close]));
+    courtMap = new Map(courtPts.map(p => [p.time, p.value]));
+  }
+
+  // Initial render — instant, no network wait
+  // Données live chargées au démarrage via refresh() — pas de données embarquées
+  // Premier rendu déclenché par refresh() plus bas (données live)
+
+  async function refresh() {
+    const statusEl = document.getElementById('hud-status');
+    try {
+      const endMs = Date.now();
+      const wms = warmupMs(currentTf);
+      const startMs = endMs - currentHoursMs - wms;
+      const dispStart = Math.floor((endMs - currentHoursMs) / 1000);
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'candleSnapshot', req: { coin: currentCoin, interval: currentTf, startTime: startMs, endTime: endMs } }),
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const raw = await resp.json();
+      const data = (raw || [])
+        .filter(c => c && c.t != null)
+        .map(c => ({ time: Math.floor(Number(c.t) / 1000), open: +c.o, high: +c.h, low: +c.l, close: +c.c, volume: +c.v }))
+        .filter(c => !isNaN(c.open))
+        .sort((a, b) => a.time - b.time);
+      applyData(data, dispStart);
+      if (!window._firstFit) {
+        mainChart.timeScale().fitContent();
+        cdurChart.timeScale().fitContent();
+        window._firstFit = true;
+      }
+      const now = new Date().toLocaleTimeString();
+      statusEl.textContent = (data.filter(c => c.time >= dispStart).length) + ' candles · updated ' + now;
+      statusEl.className = '';
+    } catch(e) {
+      statusEl.textContent = 'Refresh error: ' + e.message;
+      statusEl.className = 'error';
+    }
+  }
+
+  // ── Asset picker ──────────────────────────────────────────────────────────
+  let allAssets = []; // [{display, coin, tag}]
+  const assetInput = document.getElementById('asset-input');
+  const assetDropdown = document.getElementById('asset-dropdown');
+  const H = {'Content-Type':'application/json'};
+
+  async function loadAssets() {
+    assetDropdown.innerHTML = '<div class="asset-item" style="color:#787b86">Loading…</div>';
+    try {
+      // Step 1 — fetch main perps + spot + DEX list in parallel
+      const [mainR, spotR, dexR] = await Promise.all([
+        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'meta'})}),
+        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'spotMeta'})}),
+        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'perpDexs'})}).catch(()=>null),
+      ]);
+      const mainD = await mainR.json();
+      const spotD = await spotR.json();
+      const dexList = (dexR && dexR.ok) ? await dexR.json().catch(()=>[]) : [];
+
+      const mainPerps = (mainD?.universe ?? []).map(a => ({display:a.name, coin:a.name, tag:''}));
+
+      // Step 2 — fetch each named DEX meta in parallel
+      const namedDexes = Array.isArray(dexList) ? dexList.filter(d => d && d.name) : [];
+      const dexMetas = await Promise.all(namedDexes.map(d =>
+        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'meta',dex:d.name})})
+          .then(r => r.json())
+          .then(m => (m?.universe ?? []).map(a => ({display:a.name, coin:a.name, tag:d.name})))
+          .catch(() => [])
+      ));
+
+      // Step 3 — spot (coin = @N format)
+      const spots = (spotD?.universe ?? []).map((u, i) => ({
+        display: u.name, coin: '@' + (u.index ?? i), tag: 'spot',
+      }));
+
+      // Merge & dedup by coin, then sort
+      const seen = new Set();
+      allAssets = [...mainPerps, ...dexMetas.flat(), ...spots].filter(a => {
+        if (seen.has(a.coin)) return false;
+        seen.add(a.coin); return true;
+      }).sort((a, b) => a.display.localeCompare(b.display));
+
+    } catch(e) {
+      allAssets = [{display:currentCoin, coin:currentCoin, tag:''}];
+    }
+    renderDropdown('');
+  }
+
+  function renderDropdown(q) {
+    const lq = q.toLowerCase();
+    const items = q ? allAssets.filter(a => a.display.toLowerCase().includes(lq)) : allAssets;
+    if (!items.length) { assetDropdown.innerHTML = '<div class="asset-item" style="color:#787b86">No match</div>'; return; }
+    assetDropdown.innerHTML = items.map(a => {
+      const badge = a.tag ? ` <span style="color:#444;font-size:9px">${a.tag}</span>` : '';
+      return `<div class="asset-item${a.coin===currentCoin?' cur':''}" data-coin="${a.coin}" data-display="${a.display}">${a.display}${badge}</div>`;
+    }).join('');
+    assetDropdown.querySelectorAll('.asset-item[data-coin]').forEach(el =>
+      el.addEventListener('click', () => selectAsset(el.dataset.coin, el.dataset.display))
+    );
+  }
+
+  function syncUrl() {
+    const u = new URL(window.location);
+    u.searchParams.set('coin', currentCoin);
+    u.searchParams.set('tf', currentTf);
+    window.history.replaceState(null, '', u);
+  }
+
+  function selectAsset(coin, display) {
+    currentCoin = coin;
+    assetInput.value = display ?? coin;
+    assetDropdown.style.display = 'none';
+    document.title = (display ?? coin) + ' · ' + currentTf;
+    syncUrl();
+    clearInterval(autoRefresh);
+    refresh();
+    autoRefresh = setInterval(refresh, TF_REFRESH[currentTf] ?? REFRESH_MS);
+  }
+
+  const curDisplay = () => (allAssets.find(a => a.coin === currentCoin) || {display:currentCoin}).display;
+  assetInput.addEventListener('focus', () => {
+    renderDropdown(assetInput.value === curDisplay() ? '' : assetInput.value);
+    assetDropdown.style.display = 'block';
+    setTimeout(() => { const el = assetDropdown.querySelector('.cur'); if (el) el.scrollIntoView({block:'nearest'}); }, 0);
+  });
+  assetInput.addEventListener('input', () => {
+    renderDropdown(assetInput.value);
+    assetDropdown.style.display = 'block';
+  });
+  assetInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { assetDropdown.style.display = 'none'; assetInput.value = curDisplay(); }
+    if (e.key === 'Enter') {
+      const first = assetDropdown.querySelector('.asset-item[data-coin]');
+      if (first) selectAsset(first.dataset.coin, first.dataset.display);
+    }
+  });
+  document.addEventListener('click', e => {
+    if (!e.target.closest('#asset-picker')) assetDropdown.style.display = 'none';
+  });
+
+  loadAssets();
+
+  // Toolbar
+  document.querySelectorAll('.tf-btn').forEach(b => {
+    if (b.dataset.tf === currentTf) b.classList.add('active');
+    b.addEventListener('click', () => {
+      currentTf = b.dataset.tf;
+      currentHoursMs = TF_DEFAULT_HOURS_MS[currentTf] ?? HOURS_MS;
+      document.querySelectorAll('.tf-btn').forEach(x => x.classList.toggle('active', x.dataset.tf === currentTf));
+      document.title = currentCoin + ' · ' + currentTf;
+      syncUrl();
+      clearInterval(autoRefresh);
+      refresh();
+      autoRefresh = setInterval(refresh, TF_REFRESH[currentTf] ?? REFRESH_MS);
+    });
+  });
+
+  refresh();
+  let autoRefresh = setInterval(refresh, REFRESH_MS);
+</script>
+</body>
+</html>
