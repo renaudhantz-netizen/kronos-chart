@@ -1,544 +1,366 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>SOL · 1h · 72h</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KRONOS · Hyperliquid Live</title>
+<script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #131722; font-family: -apple-system, BlinkMacSystemFont, sans-serif; overflow: hidden; }
-  #wrap-main { position: relative; }
-  #wrap-cdur { position: relative; border-top: 1px solid #2a2e39; }
-  #tl { position: absolute; top: 10px; left: 16px; z-index: 20; display: flex; flex-direction: column; gap: 4px; }
-  #asset-picker { position: relative; width: 150px; }
-  #asset-input { width: 100%; background: #1e2433; color: #d1d4dc; border: 1px solid #2a2e39; padding: 3px 8px; font-size: 13px; font-weight: 600; border-radius: 3px; font-family: inherit; outline: none; cursor: pointer; letter-spacing: .5px; }
-  #asset-input:focus { border-color: #555; cursor: text; }
-  #asset-dropdown { display: none; position: absolute; top: calc(100% + 2px); left: 0; width: 180px; max-height: 260px; overflow-y: auto; background: #1e2433; border: 1px solid #2a2e39; border-radius: 3px; z-index: 30; box-shadow: 0 6px 16px rgba(0,0,0,.6); }
-  #asset-dropdown::-webkit-scrollbar { width: 5px; } #asset-dropdown::-webkit-scrollbar-thumb { background: #2a2e39; border-radius: 3px; }
-  .asset-item { padding: 5px 10px; color: #d1d4dc; font-size: 12px; cursor: pointer; }
-  .asset-item:hover, .asset-item.cur { background: #2a2e39; }
-  .asset-item.cur { color: #26a69a; }
-  #hud-status { color: #e0e3eb; font-size: 11px; pointer-events: none; }
-  #hud-status.error { color: #ef5350; }
-  .sub-label { position: absolute; top: 4px; left: 8px; z-index: 10; color: #e0e3eb; font-size: 10px; pointer-events: none; }
-  #toolbar { position: absolute; top: 10px; right: 16px; z-index: 10; display: flex; gap: 2px; }
-  .tf-btn { background: transparent; color: #787b86; border: 1px solid #2a2e39; padding: 2px 8px; cursor: pointer; font-size: 11px; border-radius: 3px; font-family: inherit; transition: color .15s, background .15s; }
-  .tf-btn:hover { color: #d1d4dc; border-color: #555; }
-  .tf-btn.active { color: #d1d4dc; background: #2a2e39; border-color: #2a2e39; }
+:root{--bg:#0b0e13;--panel:#121722;--panel2:#1a2130;--line:#2a3447;--txt:#e6ebf5;--mut:#8693ad;--acc:#4dd0e1;--up:#26c281;--dn:#ef5350;--gold:#ffd54f;--orange:#ff9800;--purple:#f472b6;--blue:#60a5fa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:8px}
+.wrap{max-width:1400px;margin:0 auto}
+.header{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);margin-bottom:8px;flex-wrap:wrap}
+.header h1{font-size:16px;font-weight:700;color:#f0f6fc}
+.badge{display:inline-block;font-size:9px;padding:2px 7px;border-radius:10px;background:var(--panel2)}
+.badge.live{color:var(--up);border:1px solid #2ea04340;background:#2ea04315}
+.controls{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.controls select,.controls button{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:4px 10px;border-radius:5px;font-size:11px;font-family:inherit;cursor:pointer}
+.controls select:hover,.controls button:hover{border-color:var(--acc)}
+.controls button.active{border-color:var(--acc);color:var(--acc);background:var(--panel)}
+.controls .tog{padding:3px 8px;font-size:10px}
+.chart-box{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:6px}
+.chart-container{width:100%;height:400px}
+.chart-container-sm{width:100%;height:130px}
+.chart-wrapper{position:relative}
+.info-bar{display:flex;gap:3px;margin-bottom:6px;flex-wrap:nowrap;overflow-x:auto}
+.info-tile{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:3px 7px;flex:0 0 auto;min-width:80px;white-space:nowrap}
+.info-tile .lbl{font-size:8px;color:var(--mut);text-transform:uppercase;letter-spacing:.2px}
+.info-tile .val{font-size:11px;font-weight:700;line-height:1.3}
+.info-tile .val.g{color:var(--up)} .info-tile .val.r{color:var(--dn)} .info-tile .val.c{color:var(--gold)}
+.status{font-size:10px;color:var(--mut);margin:4px 0;text-align:right}
+#sharedCrosshair{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.25);pointer-events:none;display:none;z-index:50}
+#sharedTooltip{position:absolute;top:3px;right:3px;background:rgba(11,14,19,0.88);border:1px solid rgba(255,255,255,0.1);border-radius:5px;padding:3px 8px;font-size:9px;color:var(--txt);pointer-events:none;display:none;z-index:51;font-family:monospace;line-height:1.5;text-align:right}
+#coinSearch{background:var(--panel2);border:1px solid var(--line);color:var(--txt);padding:4px 8px;border-radius:5px;font-size:11px;width:120px;font-family:inherit}
+#coinSearch:focus{outline:none;border-color:var(--acc)}
+#coinList{max-height:300px;overflow-y:auto;position:absolute;top:100%;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:5px;display:none;z-index:100}
+.coin-opt{padding:4px 8px;cursor:pointer;font-size:11px;display:flex;justify-content:space-between}
+.coin-opt:hover{background:var(--panel2)}
+.coin-opt .cp{color:var(--mut)}
+.coin-opt.sel{border-left:2px solid var(--acc);color:var(--acc)}
+.coin-wrap{position:relative;display:inline-block}
+.ws-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:3px}
+.ws-dot.on{background:var(--up);box-shadow:0 0 5px #2ea04380}
+.ws-dot.off{background:var(--dn)}
 </style>
 </head>
 <body>
-<div id="wrap-main">
-  <div id="tl">
-    <div id="asset-picker">
-      <input type="text" id="asset-input" autocomplete="off" spellcheck="false">
-      <div id="asset-dropdown"></div>
-    </div>
-    <span id="hud-status">Loading…</span>
-  </div>
-  <div id="chart-main"></div>
-  <div id="toolbar">
-    <button class="tf-btn" data-tf="5m">5m</button>
-    <button class="tf-btn" data-tf="15m">15m</button>
-    <button class="tf-btn" data-tf="1h">1H</button>
-    <button class="tf-btn" data-tf="2h">2H</button>
-    <button class="tf-btn" data-tf="4h">4H</button>
-    <button class="tf-btn" data-tf="1d">1D</button>
-    <button class="tf-btn" data-tf="1w">1W</button>
+<div class="wrap">
+<div class="header">
+  <h1>KRONOS · Hyperliquid</h1>
+  <span class="badge live">● Live</span>
+  <span class="badge" id="ttlBadge">—</span>
+  <span style="flex:1"></span>
+  <span class="ws-dot off" id="wsDot"></span><span id="wsStatus" style="font-size:10px;color:var(--mut)">Deconnecte</span>
+</div>
+
+<div class="controls">
+  <div class="coin-wrap">
+    <input id="coinSearch" placeholder="BTC, SOL, HYPE..." autocomplete="off" oninput="filterCoins(this.value)">
+    <div id="coinList"></div>
   </div>
 </div>
-<div id="wrap-cdur">
-  <span class="sub-label"><span style="color:#26C6DA">CDUR Court</span> &nbsp;·&nbsp; <span style="color:#FF7043">CDUR Long</span></span>
-  <div id="chart-cdur"></div>
+
+<div class="controls" id="tfControls">
+  <button class="" onclick="setTF('15m')">15m</button> <button class="" onclick="setTF('30m')">30m</button> <button class="" onclick="setTF('1h')">1H</button> <button class="" onclick="setTF('2h')">2H</button> <button class=" active" onclick="setTF('4h')">4H</button> <button class="" onclick="setTF('1d')">1D</button> <button class="" onclick="setTF('1w')">1S</button>
 </div>
-<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+
+<div class="controls">
+  <button class="tog active" onclick="toggleBB()">BB</button>
+  <button class="tog active" onclick="toggleSMA()">SMA</button>
+  <button class="tog active" onclick="toggleRSI()">RSI 14</button>
+  <button class="tog active" onclick="toggleCDURL()" style="border-color:#f472b6">CDUR L</button>
+  <button class="tog active" onclick="toggleCDURC()" style="border-color:#60a5fa">CDUR C</button>
+  <span style="color:var(--mut);font-size:10px;margin-left:6px" id="candleInfo"></span>
+</div>
+
+<div class="info-bar" id="infoBar"></div>
+
+<div class="chart-wrapper">
+<div class="chart-box"><div class="chart-container" id="priceChart"></div></div>
+<div class="chart-box" id="cdurPanel">
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+    <span style="font-size:10px;color:var(--mut)">CDUR Long . CDUR Court</span>
+  </div>
+  <div class="chart-container-sm" id="cdurChart"></div>
+</div>
+<div class="chart-box" id="rsiPanel">
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:3px">
+    <span style="font-size:10px;color:var(--mut)">RSI 14</span>
+  </div>
+  <div class="chart-container-sm" id="rsiChart"></div>
+</div>
+<div id="sharedCrosshair"></div>
+<div id="sharedTooltip"></div>
+</div>
+
+<div class="status"><span id="dataDate"></span></div>
+</div>
+
 <script>
-  const COIN = "SOL";
-  const INTERVAL = "1h";
-  const HOURS_MS = 259200000;
-  const REFRESH_MS = 60000;
-  const API_URL = 'https://api.hyperliquid.xyz/info';
-  const MARKERS = [];  // Pas de marqueur de position fixe
-  const DISPLAY_START = null;  // Calculé dynamiquement au refresh
-  const WARMUP_MS = 1728000000;
+// === CONFIG ===
+const MARKETS = [{"name": "BTC", "price": 64961.0, "funding": -6.308e-05, "oi": 29243.10958, "volume24h": 2322068305.5071497}, {"name": "ETH", "price": 1755.0, "funding": 0.00026084, "oi": 813905.4596000009, "volume24h": 826032041.2399603}, {"name": "HYPE", "price": 68.531, "funding": 0.00125, "oi": 20328021.599999975, "volume24h": 506843123.77568877}, {"name": "SOL", "price": 73.545, "funding": -0.0010976, "oi": 5065280.320000005, "volume24h": 297977497.72594047}, {"name": "ZEC", "price": 454.13, "funding": -0.00350611, "oi": 427066.5200000001, "volume24h": 100439700.4288}, {"name": "WLD", "price": 0.6384, "funding": 0.00125, "oi": 88385691.2, "volume24h": 35446509.51268801}, {"name": "XRP", "price": 1.1442, "funding": 0.00125, "oi": 87086348.0, "volume24h": 31948211.279000007}, {"name": "SUI", "price": 0.72886, "funding": 0.00125, "oi": 37870569.000000015, "volume24h": 29330722.047627997}, {"name": "NEAR", "price": 2.1266, "funding": 0.00125, "oi": 38395668.60000003, "volume24h": 25011094.25347}, {"name": "LIT", "price": 1.6676, "funding": 0.00125, "oi": 39384078.0, "volume24h": 23030969.616900034}, {"name": "ENA", "price": 0.097543, "funding": 0.00125, "oi": 204717994.0, "volume24h": 14499030.448184015}, {"name": "FARTCOIN", "price": 0.13329, "funding": 0.00367787, "oi": 160458379.99999997, "volume24h": 12785632.982429007}, {"name": "EIGEN", "price": 0.3092, "funding": 0.00125, "oi": 50396864.00000001, "volume24h": 10862982.130129006}, {"name": "AVAX", "price": 6.3335, "funding": 0.00066457, "oi": 3030771.5200000005, "volume24h": 10545903.993241008}, {"name": "TAO", "price": 231.76, "funding": 0.0006067399999999999, "oi": 96351.672, "volume24h": 8694227.309329998}, {"name": "VVV", "price": 15.718, "funding": 0.00125, "oi": 1676228.3600000008, "volume24h": 7527172.226889999}, {"name": "PUMP", "price": 0.001508, "funding": 0.00125, "oi": 18137780722.0, "volume24h": 7488556.486582998}, {"name": "JUP", "price": 0.20721, "funding": 0.00019852999999999998, "oi": 38672210.0, "volume24h": 7234803.2528399965}, {"name": "UNI", "price": 3.079, "funding": 0.00125, "oi": 3759067.8000000007, "volume24h": 7180708.505380001}, {"name": "XPL", "price": 0.090331, "funding": 0.00125, "oi": 339710960.0, "volume24h": 6770153.038526007}, {"name": "TRUMP", "price": 1.9225, "funding": -0.00075616, "oi": 6020297.599999998, "volume24h": 6387191.2166899955}, {"name": "JTO", "price": 0.64371, "funding": 0.00125, "oi": 17810828.0, "volume24h": 6379594.10705}, {"name": "AAVE", "price": 75.008, "funding": 0.00125, "oi": 683134.96, "volume24h": 6293343.995490002}, {"name": "kPEPE", "price": 0.002871, "funding": 0.00125, "oi": 4536928224.0, "volume24h": 6169701.167757}, {"name": "MET", "price": 0.15999, "funding": -0.008512780000000001, "oi": 19935470.0, "volume24h": 5021180.2162999995}, {"name": "RESOLV", "price": 0.021698, "funding": 0.00125, "oi": 31023034.0, "volume24h": 4398851.243399998}, {"name": "ADA", "price": 0.16019, "funding": -0.00349954, "oi": 142797890.0, "volume24h": 4303616.794039999}, {"name": "TNSR", "price": 0.039, "funding": -0.03813249, "oi": 20821991.999999996, "volume24h": 4219584.722503001}, {"name": "XMR", "price": 327.43, "funding": 0.00125, "oi": 144306.504, "volume24h": 4209176.118759995}, {"name": "DOGE", "price": 0.083973, "funding": 0.0001338, "oi": 259869306.0, "volume24h": 3879115.810982001}, {"name": "XLM", "price": 0.21121, "funding": 0.00125, "oi": 40559160.0, "volume24h": 3863862.651510001}, {"name": "AERO", "price": 0.55587, "funding": 0.00125, "oi": 24044518.0, "volume24h": 3839745.149719997}, {"name": "PAXG", "price": 4195.3, "funding": 0.00125, "oi": 5011.226, "volume24h": 3619200.2427999983}, {"name": "BNB", "price": 597.45, "funding": -0.00027998, "oi": 40696.494, "volume24h": 3569155.2628200008}, {"name": "LINK", "price": 8.024, "funding": 0.00125, "oi": 4081459.4, "volume24h": 3475151.3522599987}, {"name": "ZRO", "price": 0.99565, "funding": 0.00125, "oi": 28337795.4, "volume24h": 2955428.275398}, {"name": "ONDO", "price": 0.33687, "funding": -0.00068963, "oi": 24314634.0, "volume24h": 2581947.3096800004}, {"name": "TRX", "price": 0.33164, "funding": 0.00011654, "oi": 48354038.0, "volume24h": 2529040.1608499987}, {"name": "CRV", "price": 0.21275, "funding": 0.00125, "oi": 26349327.6, "volume24h": 2464929.136689999}, {"name": "SAGA", "price": 0.01524, "funding": 0.00125, "oi": 48856725.2, "volume24h": 2426548.6382859997}, {"name": "W", "price": 0.01167, "funding": 0.00125, "oi": 248517425.79999998, "volume24h": 2368216.298601003}, {"name": "APT", "price": 0.6748, "funding": 0.00125, "oi": 7047143.960000001, "volume24h": 2284832.450953999}, {"name": "LAYER", "price": 0.078356, "funding": -0.09326434, "oi": 14249152.0, "volume24h": 2266219.2564910008}, {"name": "FET", "price": 0.18537, "funding": 0.00125, "oi": 36252800.0, "volume24h": 2145716.607230002}, {"name": "PENDLE", "price": 1.4213, "funding": 0.00125, "oi": 4927460.0, "volume24h": 2041699.8314999994}, {"name": "SPX", "price": 0.38767, "funding": 0.00125, "oi": 11355513.6, "volume24h": 2020942.222880001}, {"name": "CHIP", "price": 0.03558, "funding": 0.00019747, "oi": 105485844.0, "volume24h": 1984783.8357209999}, {"name": "BCH", "price": 201.18, "funding": 0.00125, "oi": 47274.822, "volume24h": 1914116.4997599998}, {"name": "WLFI", "price": 0.059044, "funding": 0.00091935, "oi": 183018152.0, "volume24h": 1870613.0430869998}, {"name": "2Z", "price": 0.073077, "funding": 0.0008670300000000001, "oi": 13181546.0, "volume24h": 1867979.2163600028}, {"name": "ASTER", "price": 0.64067, "funding": 0.00125, "oi": 46486440.0, "volume24h": 1631372.80653}, {"name": "BIO", "price": 0.030712, "funding": -0.01505535, "oi": 43378180.0, "volume24h": 1630109.0265859999}, {"name": "WIF", "price": 0.17012, "funding": 0.00125, "oi": 17359642.0, "volume24h": 1625499.4245699998}, {"name": "INJ", "price": 4.89, "funding": 0.0006552999999999999, "oi": 631287.2, "volume24h": 1524964.6339}, {"name": "ARB", "price": 0.0855, "funding": -0.0008294299999999999, "oi": 45164409.4, "volume24h": 1445575.3488159997}, {"name": "LTC", "price": 45.221, "funding": 0.00125, "oi": 476950.98, "volume24h": 1364895.5419599996}, {"name": "MEGA", "price": 0.055042, "funding": 0.00125, "oi": 125888954.0, "volume24h": 1337590.7020020008}, {"name": "TIA", "price": 0.40745, "funding": 0.00125, "oi": 5568884.399999999, "volume24h": 1290085.2673640011}, {"name": "POPCAT", "price": 0.047407, "funding": 0.00125, "oi": 26042098.0, "volume24h": 1284844.177767}, {"name": "ETHFI", "price": 0.35325, "funding": 0.00125, "oi": 9080973.0, "volume24h": 1233145.2718800006}, {"name": "PENGU", "price": 0.006791, "funding": 0.00125, "oi": 580131476.0, "volume24h": 1169001.59215}, {"name": "IO", "price": 0.19545, "funding": 0.0006131099999999999, "oi": 4013641.8, "volume24h": 1039923.974944}, {"name": "GRASS", "price": 0.44947, "funding": 0.00125, "oi": 18329182.799999997, "volume24h": 881559.1547259999}, {"name": "DYDX", "price": 0.1362, "funding": 0.00125, "oi": 31763139.000000004, "volume24h": 769115.2784959998}, {"name": "MORPHO", "price": 1.8292, "funding": 0.00125, "oi": 1767014.2000000002, "volume24h": 747777.9935900001}, {"name": "PYTH", "price": 0.037495, "funding": 0.00125, "oi": 20104846.0, "volume24h": 730708.3350019996}, {"name": "DOT", "price": 0.96563, "funding": 0.00125, "oi": 4151276.8000000003, "volume24h": 715611.4674149998}, {"name": "MON", "price": 0.021101, "funding": 0.00125, "oi": 1208802136.0, "volume24h": 670636.259643}, {"name": "HMSTR", "price": 0.000184, "funding": 0.00125, "oi": 1036462356.0, "volume24h": 669017.7031340004}, {"name": "ICP", "price": 2.2896, "funding": 0.00125, "oi": 825596.2000000001, "volume24h": 633762.1288100001}, {"name": "ATOM", "price": 1.8133, "funding": 0.0005979900000000001, "oi": 1759475.5799999998, "volume24h": 618114.9832920001}, {"name": "RENDER", "price": 1.6865, "funding": 0.00125, "oi": 822625.8, "volume24h": 618068.8165500002}, {"name": "VIRTUAL", "price": 0.60002, "funding": 0.00125, "oi": 9976409.200000003, "volume24h": 592200.8481239997}, {"name": "IP", "price": 0.31661, "funding": 0.00125, "oi": 8256432.600000001, "volume24h": 574813.882742}, {"name": "HBAR", "price": 0.079766, "funding": 0.00125, "oi": 43981102.0, "volume24h": 570443.1910460002}, {"name": "kBONK", "price": 0.004671, "funding": 0.00125, "oi": 1196241656.0, "volume24h": 563560.6289729999}, {"name": "SEI", "price": 0.055287, "funding": 0.00125, "oi": 24979600.0, "volume24h": 558474.4078449997}, {"name": "SAND", "price": 0.056485, "funding": 0.00125, "oi": 7231456.0, "volume24h": 545211.803741}, {"name": "ORDI", "price": 3.3599, "funding": 0.00121208, "oi": 119092.62, "volume24h": 485413.9760750001}, {"name": "POL", "price": 0.079801, "funding": 0.00125, "oi": 28618978.0, "volume24h": 471648.3394580001}, {"name": "ALGO", "price": 0.090849, "funding": 0.00125, "oi": 20473890.0, "volume24h": 464898.1229889999}, {"name": "LDO", "price": 0.27741, "funding": 0.00125, "oi": 16778392.6, "volume24h": 453742.4922409999}, {"name": "FIL", "price": 0.80501, "funding": 0.00125, "oi": 3001832.0, "volume24h": 444148.3378580001}, {"name": "HYPER", "price": 0.082235, "funding": -0.00022538, "oi": 2728764.0, "volume24h": 442582.898551}, {"name": "INIT", "price": 0.060278, "funding": -0.00072497, "oi": 4509742.0, "volume24h": 441375.44037}, {"name": "AR", "price": 2.0156, "funding": 0.00125, "oi": 701474.2400000001, "volume24h": 422477.1627190002}, {"name": "KAS", "price": 0.029947, "funding": 0.00125, "oi": 33460566.0, "volume24h": 413361.103471}, {"name": "AIXBT", "price": 0.023324, "funding": -0.00452261, "oi": 9576900.0, "volume24h": 412925.3350069999}, {"name": "S", "price": 0.026839, "funding": -0.01355901, "oi": 19053216.0, "volume24h": 411973.3056489998}, {"name": "OP", "price": 0.1038, "funding": 0.00125, "oi": 29698070.000000004, "volume24h": 401600.781894}, {"name": "kSHIB", "price": 0.004717, "funding": -0.00613258, "oi": 341561182.0, "volume24h": 394931.4338299999}, {"name": "ME", "price": 0.06815, "funding": -0.05894136, "oi": 2449855.6, "volume24h": 389979.0779649999}, {"name": "kNEIRO", "price": 0.06955, "funding": -0.00264206, "oi": 2387370.8, "volume24h": 379081.61186}, {"name": "AXS", "price": 1.0502, "funding": 0.00125, "oi": 449022.4, "volume24h": 371573.17617}, {"name": "PNUT", "price": 0.04632, "funding": 0.00125, "oi": 5298879.0, "volume24h": 352510.8332739999}, {"name": "STRK", "price": 0.03433, "funding": 0.00125, "oi": 76002997.0, "volume24h": 335056.723598}, {"name": "APE", "price": 0.1393, "funding": 0.00125, "oi": 6237193.2, "volume24h": 328126.5583510002}, {"name": "DYM", "price": 0.01851, "funding": 0.00125, "oi": 11421479.999999998, "volume24h": 324470.055355}, {"name": "CC", "price": 0.15047, "funding": 0.00125, "oi": 35433326.0, "volume24h": 321551.09798}, {"name": "SUPER", "price": 0.095859, "funding": 0.00125, "oi": 1643410.0, "volume24h": 320537.4390089998}, {"name": "HEMI", "price": 0.005689, "funding": 0.00125, "oi": 262367346.0, "volume24h": 320280.3040749999}, {"name": "BERA", "price": 0.23581, "funding": 0.00125, "oi": 6105703.8, "volume24h": 311969.9632369999}, {"name": "SNX", "price": 0.24585, "funding": -0.00028397000000000003, "oi": 2313486.8, "volume24h": 311027.3860519999}, {"name": "STX", "price": 0.18495, "funding": 0.00125, "oi": 2574577.8, "volume24h": 285642.4079710001}, {"name": "MANTA", "price": 0.07831, "funding": 0.00125, "oi": 31542691.2, "volume24h": 281844.5240779999}, {"name": "ACE", "price": 0.0821, "funding": 0.00125, "oi": 3619585.66, "volume24h": 280404.5675220001}, {"name": "PURR", "price": 0.10004, "funding": 0.00125, "oi": 73706632.0, "volume24h": 276559.2612490001}, {"name": "DASH", "price": 35.232, "funding": 0.00125, "oi": 27956.4, "volume24h": 267026.7887800001}, {"name": "MNT", "price": 0.53621, "funding": 0.00125, "oi": 5033297.800000001, "volume24h": 253423.497831}, {"name": "RUNE", "price": 0.41548, "funding": 0.00125, "oi": 5778515.2, "volume24h": 243466.053198}, {"name": "BABY", "price": 0.014045, "funding": -0.00527647, "oi": 15841404.0, "volume24h": 242017.736109}, {"name": "STABLE", "price": 0.03573, "funding": 0.00103322, "oi": 58726600.0, "volume24h": 240138.402379}, {"name": "0G", "price": 0.27072, "funding": -0.00012887, "oi": 1022100.0, "volume24h": 238383.25625}, {"name": "NIL", "price": 0.040076, "funding": 0.00125, "oi": 17974450.0, "volume24h": 216649.280619}, {"name": "kFLOKI", "price": 0.025621, "funding": 0.00012069, "oi": 27832002.0, "volume24h": 215354.725678}, {"name": "PEOPLE", "price": 0.005918, "funding": 0.00125, "oi": 13223362.0, "volume24h": 212241.019546}, {"name": "ETC", "price": 7.3458, "funding": 0.00125, "oi": 113613.78, "volume24h": 212201.6119489999}, {"name": "ENS", "price": 4.7185, "funding": 0.00125, "oi": 293112.94, "volume24h": 208668.910817}, {"name": "XAI", "price": 0.00818, "funding": 0.00125, "oi": 59025365.0, "volume24h": 206785.0560389999}, {"name": "PROVE", "price": 0.21057, "funding": -0.006096160000000001, "oi": 994686.0, "volume24h": 202660.80901}, {"name": "KAITO", "price": 0.47251, "funding": -0.00633398, "oi": 2509312.0, "volume24h": 201229.41648}, {"name": "GRIFFAIN", "price": 0.009, "funding": 0.00256937, "oi": 58762378.0, "volume24h": 195716.688489}, {"name": "DOOD", "price": 0.001553, "funding": 0.00125, "oi": 43942696.0, "volume24h": 191820.5682009999}, {"name": "GMX", "price": 5.887, "funding": 0.00125, "oi": 49880.96, "volume24h": 191726.4157940001}, {"name": "ZETA", "price": 0.03824, "funding": 0.00125, "oi": 9153113.799999999, "volume24h": 190916.015272}, {"name": "MELANIA", "price": 0.08052, "funding": 0.00125, "oi": 8127777.6, "volume24h": 186959.8604009999}, {"name": "STBL", "price": 0.025877, "funding": 0.00125, "oi": 91652162.0, "volume24h": 174057.589657}, {"name": "ZK", "price": 0.012002, "funding": 0.00125, "oi": 69523944.0, "volume24h": 166114.937076}, {"name": "ANIME", "price": 0.002846, "funding": -0.00027205999999999997, "oi": 70230816.0, "volume24h": 164409.300286}, {"name": "SKY", "price": 0.059819, "funding": 0.00125, "oi": 29895854.0, "volume24h": 164343.238517}, {"name": "MERL", "price": 0.02201, "funding": 0.00125, "oi": 17035734.0, "volume24h": 161171.465288}, {"name": "CELO", "price": 0.06428, "funding": 0.00125, "oi": 1386674.0, "volume24h": 160119.5179329999}, {"name": "ZORA", "price": 0.007867, "funding": 0.00125, "oi": 64251372.0, "volume24h": 157253.026568}, {"name": "AVNT", "price": 0.10809, "funding": 0.00091308, "oi": 4742660.0, "volume24h": 153692.38598}, {"name": "CAKE", "price": 1.3802, "funding": 0.00125, "oi": 454706.4, "volume24h": 151848.69359}, {"name": "ALT", "price": 0.006412, "funding": 0.00046427999999999997, "oi": 46665390.0, "volume24h": 150188.539023}, {"name": "BRETT", "price": 0.005793, "funding": 0.00125, "oi": 56563046.0, "volume24h": 149486.077708}, {"name": "COMP", "price": 18.201, "funding": 0.00125, "oi": 40244.0, "volume24h": 148487.43012}, {"name": "SYRUP", "price": 0.1402, "funding": 0.00125, "oi": 14177386.0, "volume24h": 141015.57628}, {"name": "REZ", "price": 0.003298, "funding": 0.00125, "oi": 180935374.0, "volume24h": 135631.254588}, {"name": "APEX", "price": 0.29339, "funding": 0.00125, "oi": 4691260.0, "volume24h": 131127.25586}, {"name": "MOVE", "price": 0.011947, "funding": 0.00125, "oi": 20351560.0, "volume24h": 126748.098992}, {"name": "WCT", "price": 0.047222, "funding": 0.00125, "oi": 1953700.0, "volume24h": 123340.211077}, {"name": "kLUNC", "price": 0.067125, "funding": -0.00571145, "oi": 8701674.0, "volume24h": 118945.970656}, {"name": "NEO", "price": 2.185, "funding": 0.00125, "oi": 142091.3, "volume24h": 114611.7431859999}, {"name": "IMX", "price": 0.1423, "funding": 0.00125, "oi": 15816418.799999999, "volume24h": 113947.546226}, {"name": "BLUR", "price": 0.015729, "funding": 0.00125, "oi": 35315834.0, "volume24h": 109561.630529}, {"name": "LINEA", "price": 0.002536, "funding": 0.00125, "oi": 616879240.0, "volume24h": 106724.662385}, {"name": "NXPC", "price": 0.3037, "funding": 0.00125, "oi": 2139962.0, "volume24h": 106480.9294900001}, {"name": "GMT", "price": 0.008384, "funding": 0.00125, "oi": 33124408.0, "volume24h": 106024.220811}, {"name": "ZEN", "price": 4.6522, "funding": 0.00125, "oi": 57581.8, "volume24h": 105956.163952}, {"name": "MOODENG", "price": 0.041164, "funding": 0.00125, "oi": 7358194.0, "volume24h": 96893.448226}, {"name": "SUSHI", "price": 0.17746, "funding": 0.00125, "oi": 635685.8, "volume24h": 95309.301604}, {"name": "GALA", "price": 0.002651, "funding": 0.00125, "oi": 101355146.0, "volume24h": 87227.5699539999}, {"name": "BSV", "price": 12.017, "funding": 0.00125, "oi": 36687.14, "volume24h": 86667.54346}, {"name": "GOAT", "price": 0.0139, "funding": 0.00125, "oi": 14166646.0, "volume24h": 82736.657525}, {"name": "SKR", "price": 0.008372, "funding": 0.00125, "oi": 24901190.0, "volume24h": 81866.981934}, {"name": "MEME", "price": 0.000545, "funding": -0.00229993, "oi": 715134330.0, "volume24h": 81483.488335}, {"name": "AZTEC", "price": 0.015671, "funding": 0.00125, "oi": 50348874.0, "volume24h": 79655.571695}, {"name": "TRB", "price": 13.957, "funding": 0.00125, "oi": 29898.14, "volume24h": 75849.55855}, {"name": "BIGTIME", "price": 0.008597, "funding": -0.00064735, "oi": 16106074.0, "volume24h": 75215.683165}, {"name": "TURBO", "price": 0.000897, "funding": -0.0018588099999999998, "oi": 304516238.0, "volume24h": 74989.215959}, {"name": "ARK", "price": 0.11614, "funding": -0.00142764, "oi": 579030.0, "volume24h": 74139.70766}, {"name": "FOGO", "price": 0.01291, "funding": 0.00125, "oi": 25748172.0, "volume24h": 71002.345039}, {"name": "NOT", "price": 0.000416, "funding": 0.00125, "oi": 648558126.0, "volume24h": 70333.152297}, {"name": "YGG", "price": 0.02655, "funding": -0.00440408, "oi": 4216382.0, "volume24h": 65990.261261}, {"name": "MINA", "price": 0.042663, "funding": 0.00055206, "oi": 8357062.0, "volume24h": 64398.246453}, {"name": "CFX", "price": 0.049359, "funding": 0.00125, "oi": 71010366.0, "volume24h": 61857.507934}, {"name": "SOPH", "price": 0.005419, "funding": 0.00125, "oi": 23469974.0, "volume24h": 59570.401207}, {"name": "POLYX", "price": 0.03886, "funding": 0.00125, "oi": 2440602.0, "volume24h": 59528.286679}, {"name": "UMA", "price": 0.41978, "funding": 0.00125, "oi": 591643.0, "volume24h": 58338.287485}, {"name": "GAS", "price": 1.1013, "funding": 0.00125, "oi": 141516.0, "volume24h": 51043.44556}, {"name": "VINE", "price": 0.012361, "funding": 0.00403985, "oi": 31762692.0, "volume24h": 41042.449225}, {"name": "USUAL", "price": 0.01027, "funding": 0.00125, "oi": 14830155.6, "volume24h": 38715.754514}, {"name": "IOTA", "price": 0.0448, "funding": -0.0012948900000000001, "oi": 4113780.0, "volume24h": 34511.983255}, {"name": "RSR", "price": 0.001314, "funding": 0.00125, "oi": 88884024.0, "volume24h": 28600.695217}, {"name": "BOME", "price": 0.000456, "funding": 0.00125, "oi": 390537628.0, "volume24h": 26143.251868}, {"name": "BANANA", "price": 2.9247, "funding": 0.00125, "oi": 42261.6, "volume24h": 25540.06946}, {"name": "MATIC", "price": 0.37621, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "RNDR", "price": 6.8952, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "FTM", "price": 0.71688, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "MKR", "price": 1831.5, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "FXS", "price": 0.65538, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "HPOS", "price": 0.041873, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "RLB", "price": 0.071, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "UNIBOT", "price": 7.636, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "OX", "price": 0.007459, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "FRIEND", "price": 4.72, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "SHIA", "price": 0.000621, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "CYBER", "price": 1.0415, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "BLZ", "price": 0.070043, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "FTT", "price": 0.32243, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "LOOM", "price": 0.071161, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "OGN", "price": 0.055683, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "RDNT", "price": 0.018328, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "BNT", "price": 0.38287, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "CANTO", "price": 0.066, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "REQ", "price": 0.15473, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "ORBS", "price": 0.01939, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "TON", "price": 1.8014, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "STG", "price": 0.15387, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "STRAX", "price": 1.5829, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "BADGER", "price": 0.88823, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "ILV", "price": 12.118, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "USTC", "price": 0.007534, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "NFTI", "price": 6.5609, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "NTRN", "price": 0.1238, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "MAV", "price": 0.015456, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "MAVIA", "price": 0.03725, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "PANDORA", "price": 3026.3, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "PIXEL", "price": 0.024027, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "AI", "price": 0.12555, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "MYRO", "price": 0.015813, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "OMNI", "price": 4.1915, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "BLAST", "price": 0.000456, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "LISTA", "price": 0.12466, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "MEW", "price": 0.00064, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "kDOGS", "price": 0.13659, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "CATI", "price": 0.082821, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "SCR", "price": 0.04737, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "NEIROETH", "price": 0.01808, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "CHILLGUY", "price": 0.012699, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "AI16Z", "price": 0.06157, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "ZEREBRO", "price": 0.032083, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "JELLY", "price": 0.037555, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "TST", "price": 0.017491, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "OM", "price": 0.06527, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "PROMPT", "price": 0.03661, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "LAUNCHCOIN", "price": 0.060367, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}, {"name": "YZY", "price": 0.31107, "funding": 0.0, "oi": 0.0, "volume24h": 0.0}];
+const TF_CFG = {"15m": {"sec": 900, "label": "15m", "hours": 72}, "30m": {"sec": 1800, "label": "30m", "hours": 144}, "1h": {"sec": 3600, "label": "1H", "hours": 288}, "2h": {"sec": 7200, "label": "2H", "hours": 528}, "4h": {"sec": 14400, "label": "4H", "hours": 1000}, "1d": {"sec": 86400, "label": "1D", "hours": 7200}, "1w": {"sec": 604800, "label": "1S", "hours": 50400}};
+const HL_API = "https://api.hyperliquid.xyz/info";
 
-  const TF_HOURS = {'1m':1/60,'3m':3/60,'5m':5/60,'15m':.25,'30m':.5,'1h':1,'2h':2,'4h':4,'8h':8,'12h':12,'1d':24,'1w':168};
-  const TF_REFRESH = {'5m':15000,'15m':30000,'1h':60000,'2h':60000,'4h':120000,'1d':300000,'1w':300000};
-  const TF_DEFAULT_HOURS_MS = {'5m':24*3.6e6,'15m':72*3.6e6,'1h':168*3.6e6,'2h':336*3.6e6,'4h':720*3.6e6,'1d':4320*3.6e6,'1w':8736*3.6e6};
-  const TF_SECS = {'1m':60,'3m':180,'5m':300,'15m':900,'30m':1800,'1h':3600,'2h':7200,'4h':14400,'8h':28800,'12h':43200,'1d':86400,'1w':604800};
-  // ── URL params : ?coin=SOL&tf=4h pour liens directs (Telegram, etc.) ──
-  const _params = new URLSearchParams(window.location.search);
-  const _validTf = ['5m','15m','1h','2h','4h','1d','1w'];
-  const _urlCoin = (_params.get('coin') || '').toUpperCase().trim();
-  const _urlTf = (_params.get('tf') || '').toLowerCase().trim();
+let activeCoin = "BTC";
+let activeTF = "4h";
+let showBB = true, showSMA = true, showRSI = true, showCDURL = true, showCDURC = true;
+let chart, cdurChart, rsiChart;
+let candleSeries, volSeries, bbU, bbM, bbL, sma10, sma30, sma50, cdurL, cdurC, rsiS;
+let currentCandles = [];
+let ws = null, loading = false;
 
-  let currentCoin = _urlCoin || COIN;
-  let currentTf = _validTf.includes(_urlTf) ? _urlTf : INTERVAL;
-  let currentHoursMs = TF_DEFAULT_HOURS_MS[currentTf] ?? HOURS_MS;
-  document.title = currentCoin + ' · ' + currentTf;
-  document.getElementById('asset-input').value = currentCoin;
-  const warmupMs = tf => Math.round(480 * (TF_HOURS[tf] ?? 1) * 3600000);
+// === HL API (browser) ===
+async function hl(body) {
+  const r = await fetch(HL_API, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body)});
+  return r.json();
+}
 
-  const mainH = () => Math.floor(window.innerHeight * 0.68);
-  const cdurH = () => Math.floor(window.innerHeight * 0.32);
+// === INDICATORS JS ===
+function ema(v,p){let k=2/(p+1),o=[],pr=null;for(let x of v){if(x==null||x!==x){o.push(null);continue}pr=pr==null?x:x*k+pr*(1-k);o.push(pr)}return o}
+function dema(v,p){let e1=ema(v,p),e2=ema(e1,p);return e1.map((x,i)=>x!=null&&e2[i]!=null?2*x-e2[i]:null)}
+function rsiWild(v,p){
+  let o=Array(v.length).fill(null),ag=0,al=0,ct=0,se=false,pr=null;
+  for(let i=0;i<v.length;i++){let x=v[i];if(x==null||x!==x){pr=null;continue}if(pr==null){pr=x;continue}
+  let d=x-pr;pr=x;let g=d>0?d:0,l=d<0?-d:0;
+  if(!se){ag+=g;al+=l;ct++;if(ct==p){ag/=p;al/=p;se=true;o[i]=al<1e-9?100:100-100/(1+ag/al)}}
+  else{ag=(ag*(p-1)+g)/p;al=(al*(p-1)+l)/p;o[i]=al<1e-9?100:100-100/(1+ag/al)}}return o
+}
+function sma(v,p){if(v.length<p)return v.map(()=>null);let r=v.slice(0,p-1).map(()=>null);for(let i=p-1;i<v.length;i++){let s=0;for(let j=i-p+1;j<=i;j++)s+=v[j];r.push(s/p)}return r}
+function boll(v,p,m){let mi=sma(v,p),up=v.map(()=>null),lo=v.map(()=>null);for(let i=p-1;i<v.length;i++){if(mi[i]==null)continue;let sq=0;for(let j=i-p+1;j<=i;j++)sq+=(v[j]-mi[i])**2;let std=Math.sqrt(sq/p);up[i]=mi[i]+m*std;lo[i]=mi[i]-m*std}return{u:up,m:mi,l:lo}}
+function cdurLong(c){let d25=dema(c,25),d240=dema(c,240),di=d25.map((x,i)=>x!=null&&d240[i]!=null?x-d240[i]:null);return rsiWild(dema(di,7),6)}
+function cdurCourt(c){let d15=dema(c,15),d30=dema(c,30),di=d15.map((x,i)=>x!=null&&d30[i]!=null?x-d30[i]:null);return rsiWild(dema(di,7),4)}
 
-  const TF_OPTS = {
-    borderColor: '#2a2e39', timeVisible: true, secondsVisible: false,
-    tickMarkFormatter: (ts, type) => {
-      const d = new Date(ts * 1000);
-      if (type <= 2) return d.toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' });
-      return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false });
-    },
-  };
-  const LOC_OPTS = {
-    timeFormatter: (ts) => new Date(ts * 1000).toLocaleString(undefined, {
-      day: '2-digit', month: '2-digit', year: 'numeric',
-      hour: '2-digit', minute: '2-digit', hour12: false,
-    }),
-  };
+// === FETCH ===
+async function fetchData(coin, tf) {
+  loading = true;
+  const cfg = TF_CFG[tf];
+  document.getElementById('candleInfo').textContent = 'Chargement ' + coin + ' ' + tf + '...';
+  try {
+    const now = Math.floor(Date.now());
+    const start = now - cfg.hours * 3600 * 1000;
+    const raw = await hl({type:"candleSnapshot", req:{coin, interval:tf, startTime:start, endTime:now}});
+    const candles = raw.map(c => ({t:Math.floor(c.t/1000), o:+c.o, h:+c.h, l:+c.l, c:+c.c, v:+c.v||0}));
+    candles.sort((a,b)=>a.t-b.t);
+    return candles;
+  } finally { loading = false; }
+}
 
-  const mainChart = LightweightCharts.createChart(document.getElementById('chart-main'), {
-    width: window.innerWidth, height: mainH(),
-    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#d1d4dc' },
-    grid: { vertLines: { color: '#1e2433' }, horzLines: { color: '#1e2433' } },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: '#2a2e39' },
-    timeScale: TF_OPTS,
-    localization: LOC_OPTS,
+// === BUILD ===
+function buildCharts() {
+  chart = LightweightCharts.createChart(document.getElementById('priceChart'), {
+    layout:{background:{type:'solid',color:'#0b0e13'},textColor:'#8693ad',fontSize:10},
+    grid:{vertLines:{color:'rgba(255,255,255,0.03)'},horzLines:{color:'rgba(255,255,255,0.03)'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal},
+    rightPriceScale:{borderColor:'rgba(255,255,255,0.06)',scaleMargins:{top:0.05,bottom:0.25}},
+    timeScale:{borderColor:'rgba(255,255,255,0.06)',timeVisible:true,secondsVisible:false},
   });
+  candleSeries = chart.addCandlestickSeries({upColor:'#26c281',downColor:'#ef5350',borderDownColor:'#ef5350',borderUpColor:'#26c281',wickDownColor:'#ef5350',wickUpColor:'#26c281'});
+  volSeries = chart.addHistogramSeries({priceFormat:{type:'volume'},priceScaleId:'volume'});
+  chart.priceScale('volume').applyOptions({scaleMargins:{top:0.8,bottom:0}});
+  bbU = chart.addLineSeries({color:'#60a5fa',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  bbM = chart.addLineSeries({color:'#60a5fa',lineWidth:0.5,priceLineVisible:false,lastValueVisible:false,lineStyle:2});
+  bbL = chart.addLineSeries({color:'#60a5fa',lineWidth:1,priceLineVisible:false,lastValueVisible:false});
+  sma10 = chart.addLineSeries({color:'#a3e635',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+  sma30 = chart.addLineSeries({color:'#a78bfa',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
+  sma50 = chart.addLineSeries({color:'#22d3ee',lineWidth:1.5,priceLineVisible:false,lastValueVisible:false});
 
-  const cdurChart = LightweightCharts.createChart(document.getElementById('chart-cdur'), {
-    width: window.innerWidth, height: cdurH(),
-    layout: { background: { type: 'solid', color: '#131722' }, textColor: '#e0e3eb' },
-    grid: { vertLines: { color: '#1e2433' }, horzLines: { color: '#1e2433' } },
-    crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-    rightPriceScale: { borderColor: '#2a2e39' },
-    timeScale: TF_OPTS,
-    localization: LOC_OPTS,
-    handleScroll: false,
-    handleScale: false,
+  cdurChart = LightweightCharts.createChart(document.getElementById('cdurChart'), {
+    layout:{background:{type:'solid',color:'#0b0e13'},textColor:'#64748b',fontSize:9},
+    grid:{vertLines:{color:'rgba(255,255,255,0.03)'},horzLines:{color:'rgba(255,255,255,0.03)'}},
+    rightPriceScale:{borderColor:'rgba(255,255,255,0.06)',scaleMargins:{top:0.1,bottom:0.1}},
+    timeScale:{borderColor:'rgba(255,255,255,0.06)',timeVisible:true,visible:false},
+    handleScroll:false, handleScale:false,
   });
+  cdurL = cdurChart.addLineSeries({color:'#f472b6',lineWidth:1.5,priceLineVisible:false,lastValueVisible:true});
+  cdurC = cdurChart.addLineSeries({color:'#60a5fa',lineWidth:1.5,priceLineVisible:false,lastValueVisible:true});
+  cdurL.createPriceLine({price:70,color:'#f87171',lineStyle:2,axisLabelVisible:true,title:'70'});
+  cdurL.createPriceLine({price:50,color:'#64748b',lineStyle:2,axisLabelVisible:true,title:'50'});
+  cdurL.createPriceLine({price:30,color:'#4ade80',lineStyle:2,axisLabelVisible:true,title:'30'});
 
-  // Sync time scales
-  let syncLock = false;
-  function onRange(range, targets) {
-    if (syncLock || !range) return;
-    syncLock = true;
-    targets.forEach(t => t.timeScale().setVisibleLogicalRange(range));
-    syncLock = false;
+  rsiChart = LightweightCharts.createChart(document.getElementById('rsiChart'), {
+    layout:{background:{type:'solid',color:'#0b0e13'},textColor:'#64748b',fontSize:9},
+    grid:{vertLines:{color:'rgba(255,255,255,0.03)'},horzLines:{color:'rgba(255,255,255,0.03)'}},
+    rightPriceScale:{borderColor:'rgba(255,255,255,0.06)',scaleMargins:{top:0.1,bottom:0.1}},
+    timeScale:{borderColor:'rgba(255,255,255,0.06)',timeVisible:true,visible:false},
+    handleScroll:false, handleScale:false,
+  });
+  rsiS = rsiChart.addLineSeries({color:'#fbbf24',lineWidth:1.5,priceLineVisible:false,lastValueVisible:true});
+  rsiS.createPriceLine({price:70,color:'#f87171',lineStyle:2,axisLabelVisible:true,title:'70'});
+  rsiS.createPriceLine({price:50,color:'#64748b',lineStyle:2,axisLabelVisible:true,title:'50'});
+  rsiS.createPriceLine({price:30,color:'#4ade80',lineStyle:2,axisLabelVisible:true,title:'30'});
+}
+
+function toLine(arr, times) {
+  return arr.map((v,i) => v !== null ? {time:times[i], value:v} : null).filter(x => x);
+}
+
+async function loadCoin(coin, tf) {
+  activeCoin = coin; activeTF = tf;
+  const candles = await fetchData(coin, tf);
+  if (!candles.length) return;
+  currentCandles = candles;
+  const closes = candles.map(c => c.c);
+  const times = candles.map(c => c.t);
+
+  candleSeries.setData(candles.map(c => ({time:c.t, open:c.o, high:c.h, low:c.l, close:c.c})));
+  volSeries.setData(candles.map(c => ({time:c.t, value:c.v, color:c.c>=c.o?'rgba(38,194,129,0.2)':'rgba(239,83,80,0.2)'})));
+
+  const bb = boll(closes,20,2);
+  bbU.setData(toLine(bb.u, times));
+  bbM.setData(toLine(bb.m, times));
+  bbL.setData(toLine(bb.l, times));
+  sma10.setData(toLine(sma(closes,10), times));
+  sma30.setData(toLine(sma(closes,30), times));
+  sma50.setData(toLine(sma(closes,50), times));
+  const cl = cdurLong(closes), cc = cdurCourt(closes), rs = rsiWild(closes,14);
+  cdurL.setData(toLine(cl, times));
+  cdurC.setData(toLine(cc, times));
+  rsiS.setData(toLine(rs, times));
+
+  const mk = MARKETS.find(m => m.name === coin) || {};
+  const last = candles[candles.length-1];
+  document.getElementById('infoBar').innerHTML =
+    '<div class="info-tile"><div class="lbl">Prix</div><div class="val">$'+last.c.toLocaleString(undefined,{minimumFractionDigits:2})+ '</div></div>'+
+    '<div class="info-tile"><div class="lbl">24h Vol</div><div class="val c">'+(mk.volume24h?'$'+(mk.volume24h/1e6).toFixed(1)+'M':'---')+'</div></div>'+
+    '<div class="info-tile"><div class="lbl">Funding</div><div class="val '+(mk.funding>0?'g':mk.funding<0?'r':'')+'">'+(mk.funding!==undefined?(mk.funding>0?'+':'')+mk.funding.toFixed(4)+'%':'---')+'</div></div>'+
+    '<div class="info-tile"><div class="lbl">OI</div><div class="val c">'+(mk.oi?'$'+(mk.oi*mk.price/1e6).toFixed(1)+'M':'---')+'</div></div>'+
+    '<div class="info-tile"><div class="lbl">H/L</div><div class="val">$'+Math.max(...candles.map(c=>c.h)).toLocaleString()+' / $'+Math.min(...candles.map(c=>c.l)).toLocaleString()+'</div></div>';
+
+  document.getElementById('candleInfo').textContent = candles.length + ' bougies - ' + tf + ' - ' + new Date().toLocaleString('fr-FR') + ' UTC+2';
+  chart.timeScale().fitContent();
+  cdurChart.timeScale().fitContent();
+  rsiChart.timeScale().fitContent();
+  setupCrosshairSync();
+  connectWS();
+}
+
+// === TOGGLES ===
+function toggleBB(){showBB=!showBB;event.target.classList.toggle('active');[bbU,bbM,bbL].forEach(s=>s.applyOptions({visible:showBB}))}
+function toggleSMA(){showSMA=!showSMA;event.target.classList.toggle('active');[sma10,sma30,sma50].forEach(s=>s.applyOptions({visible:showSMA}))}
+function toggleRSI(){showRSI=!showRSI;event.target.classList.toggle('active');document.getElementById('rsiPanel').style.display=showRSI?'block':'none'}
+function toggleCDURL(){showCDURL=!showCDURL;event.target.classList.toggle('active');document.getElementById('cdurPanel').style.display=(showCDURL||showCDURC)?'block':'none';cdurL.applyOptions({visible:showCDURL})}
+function toggleCDURC(){showCDURC=!showCDURC;event.target.classList.toggle('active');document.getElementById('cdurPanel').style.display=(showCDURL||showCDURC)?'block':'none';cdurC.applyOptions({visible:showCDURC})}
+
+function setTF(tf) {
+  activeTF = tf;
+  document.querySelectorAll('#tfControls button').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  loadCoin(activeCoin, tf);
+}
+
+// === COIN SELECTOR ===
+function buildCoinList() {
+  const list = document.getElementById('coinList');
+  list.innerHTML = MARKETS.map((m,i) =>
+    '<div class="coin-opt'+(m.name===activeCoin?' sel':'')+'" onclick="selectCoin('+"'"+m.name+"'"+')">'+
+      '<span>'+m.name+'</span><span class="cp">$'+m.price.toLocaleString(undefined,{maximumFractionDigits:2})+'</span></div>'
+  ).join('');
+}
+function filterCoins(q) {
+  const list = document.getElementById('coinList');
+  const uq = q.toUpperCase();
+  list.querySelectorAll('.coin-opt').forEach(el => {
+    el.style.display = el.textContent.toUpperCase().includes(uq) ? 'flex' : 'none';
+  });
+  list.style.display = 'block';
+}
+function selectCoin(coin) {
+  activeCoin = coin;
+  document.getElementById('coinSearch').value = coin;
+  document.getElementById('coinList').style.display = 'none';
+  loadCoin(coin, activeTF);
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.coin-wrap')) document.getElementById('coinList').style.display = 'none';
+});
+
+// === CROSSHAIR SYNC ===
+function setupCrosshairSync() {
+  const crosshairEl = document.getElementById('sharedCrosshair');
+  const tooltipEl = document.getElementById('sharedTooltip');
+
+  function showVals(time) {
+    const cdl = currentCandles.find(c => c.t === time);
+    if (!cdl) return;
+    const i = currentCandles.findIndex(c => c.t === time);
+    if (i<0) return;
+    const closes = currentCandles.map(c=>c.c);
+    const cl = cdurLong(closes), cc = cdurCourt(closes), rs = rsiWild(closes,14);
+    const d = new Date(time*1000);
+    const ds = d.toLocaleDateString('fr-FR',{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});
+    let h = '<span style="color:#e6ebf5;font-size:10px">'+ds+'</span>';
+    h += '<br><span style="color:#26c281">O:'+cdl.o.toFixed(0)+' H:'+cdl.h.toFixed(0)+' L:'+cdl.l.toFixed(0)+' C:'+cdl.c.toFixed(0)+'</span>';
+    if (cl[i]!=null) h += '<br><span style="color:#f472b6">CDURL: '+cl[i].toFixed(1)+'</span>';
+    if (cc[i]!=null) h += '<br><span style="color:#60a5fa">CDURc: '+cc[i].toFixed(1)+'</span>';
+    if (rs[i]!=null) h += '<br><span style="color:#fbbf24">RSI14: '+rs[i].toFixed(1)+'</span>';
+    tooltipEl.innerHTML = h;
   }
-  mainChart.timeScale().subscribeVisibleLogicalRangeChange(r => onRange(r, [cdurChart]));
-  cdurChart.timeScale().subscribeVisibleLogicalRangeChange(r => onRange(r, [mainChart]));
 
-  window.addEventListener('resize', () => {
-    const w = window.innerWidth;
-    mainChart.applyOptions({ width: w, height: mainH() });
-    cdurChart.applyOptions({ width: w, height: cdurH() });
-  });
-
-  // ── Main chart series ──────────────────────────────────────────────────────
-  const candleSeries = mainChart.addCandlestickSeries({
-    upColor: '#26a69a', downColor: '#ef5350',
-    borderVisible: false,
-    wickUpColor: '#26a69a', wickDownColor: '#ef5350',
-    priceFormat: {
-      type: 'custom',
-      formatter: p => p >= 100 ? Math.round(p).toLocaleString() : p >= 0.1 ? p.toFixed(2) : p.toPrecision(4),
-      minMove: 0.01,
-    },
-  });
-  const volumeSeries = mainChart.addHistogramSeries({
-    priceFormat: { type: 'volume' },
-    priceScaleId: 'volume',
-  });
-  mainChart.priceScale('volume').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
-
-  function toChartData(data) {
-    const cs = data.map(c => ({ time: c.time, open: c.open, high: c.high, low: c.low, close: c.close }));
-    const vs = data.map(c => ({
-      time: c.time, value: c.volume,
-      color: c.close >= c.open ? 'rgba(38,166,154,0.5)' : 'rgba(239,83,80,0.5)',
-    }));
-    return { cs, vs };
+  function onMove(param) {
+    if (!param.point || !param.time) { crosshairEl.style.display='none'; tooltipEl.style.display='none'; return; }
+    crosshairEl.style.display='block'; crosshairEl.style.left=param.point.x+'px';
+    tooltipEl.style.display='block'; showVals(param.time);
   }
 
-  function makeLine(color, style) {
-    return mainChart.addLineSeries({
-      color, lineWidth: 1, lineStyle: style ?? 0,
-      priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
+  chart.subscribeCrosshairMove(onMove);
+  if (cdurChart) cdurChart.subscribeCrosshairMove(onMove);
+  if (rsiChart) rsiChart.subscribeCrosshairMove(onMove);
+
+  const allCharts = [chart, cdurChart, rsiChart];
+  allCharts.forEach((c,i) => {
+    if (!c) return;
+    c.timeScale().subscribeVisibleLogicalRangeChange((r) => {
+      if (!r) return;
+      allCharts.forEach((x,j) => { if (x && j!==i) x.timeScale().setVisibleLogicalRange(r); });
     });
-  }
-
-  const S = LightweightCharts.LineStyle;
-  const sma10 = makeLine('#66BB6A');
-  const sma30 = makeLine('#FFCA28');
-  const sma50 = makeLine('#EC407A');
-  const bb20U  = makeLine('#42A5F5');
-  const bb20M  = makeLine('#42A5F5', S.Dashed);
-  const bb20L  = makeLine('#42A5F5');
-  const bb200U = makeLine('#FFA726', S.Dashed);
-  const bb200M = makeLine('#FFA726', S.Dashed);
-  const bb200L = makeLine('#FFA726', S.Dashed);
-
-  // ── Pivot point series ─────────────────────────────────────────────────────
-  function makePivLine() {
-    return mainChart.addLineSeries({
-      color: '#888888', lineWidth: 1, lineStyle: S.Dashed,
-      priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false,
-    });
-  }
-  const pivR3 = makePivLine();
-  const pivR2 = makePivLine();
-  const pivR1 = makePivLine();
-  const pivPP = makePivLine();
-  const pivS1 = makePivLine();
-  const pivS2 = makePivLine();
-  const pivS3 = makePivLine();
-
-  // ── CDUR oscillator series ─────────────────────────────────────────────────
-  function makeOscSeries(chart, color) {
-    const s = chart.addLineSeries({
-      color, lineWidth: 1,
-      priceLineVisible: false, lastValueVisible: true,
-      autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-    });
-    s.createPriceLine({ price: 80, color: '#ef5350', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: true });
-    s.createPriceLine({ price: 50, color: '#444444', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: false });
-    s.createPriceLine({ price: 20, color: '#26a69a', lineWidth: 1, lineStyle: S.Dashed, axisLabelVisible: true });
-    return s;
-  }
-  const cdurCourtSeries = makeOscSeries(cdurChart, '#26C6DA');
-  const cdurLongSeries  = cdurChart.addLineSeries({
-    color: '#FF7043', lineWidth: 1,
-    priceLineVisible: false, lastValueVisible: true,
-    autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
   });
+}
 
-  // ── Indicator calculations ─────────────────────────────────────────────────
-  function calcSMA(data, period) {
-    const out = [];
-    for (let i = period - 1; i < data.length; i++) {
-      const sum = data.slice(i - period + 1, i + 1).reduce((s, c) => s + c.close, 0);
-      out.push({ time: data[i].time, value: sum / period });
-    }
-    return out;
-  }
-
-  function pivotPeriodSec(tf) {
-    if (['1d','3d'].includes(tf)) return 7 * 86400;
-    if (tf === '1w') return 30 * 86400;
-    return 86400; // intraday → daily pivots
-  }
-
-  function calcPivots(data, tf) {
-    const pSec = pivotPeriodSec(tf);
-    const g = new Map();
-    for (const c of data) {
-      const k = Math.floor(c.time / pSec);
-      if (!g.has(k)) g.set(k, {O:c.open, H:c.high, L:c.low, C:c.close, t:k*pSec});
-      else { const d=g.get(k); d.H=Math.max(d.H,c.high); d.L=Math.min(d.L,c.low); d.C=c.close; }
-    }
-    const days = [...g.values()].sort((a,b)=>a.t-b.t);
-    const R = {PP:[],R1:[],R2:[],R3:[],S1:[],S2:[],S3:[]};
-    for (let i=1;i<days.length;i++) {
-      const {O,H,L,C}=days[i-1], t=days[i].t;
-      const PP=(H+L+C+O)/4;
-      R.PP.push({time:t,value:PP});
-      R.R1.push({time:t,value:2*PP-L});
-      R.R2.push({time:t,value:PP+(H-L)});
-      R.R3.push({time:t,value:H+2*(PP-L)});
-      R.S1.push({time:t,value:2*PP-H});
-      R.S2.push({time:t,value:PP-(H-L)});
-      R.S3.push({time:t,value:L-2*(H-PP)});
-    }
-    return R;
-  }
-
-  function calcBB(data, period, mult) {
-    const upper = [], middle = [], lower = [];
-    for (let i = period - 1; i < data.length; i++) {
-      const closes = data.slice(i - period + 1, i + 1).map(c => c.close);
-      const mean = closes.reduce((a, b) => a + b, 0) / period;
-      const std = Math.sqrt(closes.reduce((s, c) => s + (c - mean) ** 2, 0) / period);
-      const t = data[i].time;
-      upper.push({ time: t, value: mean + mult * std });
-      middle.push({ time: t, value: mean });
-      lower.push({ time: t, value: mean - mult * std });
-    }
-    return { upper, middle, lower };
-  }
-
-  function calcEMA(vals, period) {
-    const k = 2 / (period + 1);
-    const out = [];
-    let prev = null;
-    for (let i = 0; i < vals.length; i++) {
-      const v = vals[i];
-      if (v === null || v === undefined || isNaN(v)) { out.push(null); continue; }
-      prev = prev === null ? v : v * k + prev * (1 - k);
-      out.push(prev);
-    }
-    return out;
-  }
-
-  function calcDEMA(vals, period) {
-    const e1 = calcEMA(vals, period);
-    const e2 = calcEMA(e1, period);
-    return vals.map((_, i) => (e1[i] !== null && e2[i] !== null) ? 2 * e1[i] - e2[i] : null);
-  }
-
-  function calcRSI(vals, period) {
-    const out = new Array(vals.length).fill(null);
-    let ag = 0, al = 0, count = 0, seeded = false, prevV = null;
-    for (let i = 0; i < vals.length; i++) {
-      const v = vals[i];
-      if (v === null || isNaN(v)) { prevV = null; continue; }
-      if (prevV === null) { prevV = v; continue; }
-      const d = v - prevV; prevV = v;
-      const g = d > 0 ? d : 0, l = d < 0 ? -d : 0;
-      if (!seeded) {
-        ag += g; al += l;
-        if (++count === period) {
-          ag /= period; al /= period; seeded = true;
-          out[i] = al === 0 ? (ag === 0 ? 50 : 100) : 100 - 100 / (1 + ag / al);
-        }
-      } else {
-        ag = (ag * (period - 1) + g) / period;
-        al = (al * (period - 1) + l) / period;
-        out[i] = al === 0 ? (ag === 0 ? 50 : 100) : 100 - 100 / (1 + ag / al);
-      }
-    }
-    return out;
-  }
-
-  function calcCDURCourt(data) {
-    const cl = data.map(c => c.close);
-    const d15 = calcDEMA(cl, 15), d30 = calcDEMA(cl, 30);
-    const diff = cl.map((_, i) => d15[i] !== null && d30[i] !== null ? d15[i] - d30[i] : null);
-    return calcRSI(calcDEMA(diff, 7), 4);
-  }
-
-  function calcCDURLong(data) {
-    const cl = data.map(c => c.close);
-    const d25 = calcDEMA(cl, 25), d240 = calcDEMA(cl, 240);
-    const diff = cl.map((_, i) => d25[i] !== null && d240[i] !== null ? d25[i] - d240[i] : null);
-    return calcRSI(calcDEMA(diff, 7), 6);
-  }
-
-  // ── Crosshair sync ────────────────────────────────────────────────────────
-  let closeMap = new Map(), courtMap = new Map();
-  let xhairLock = false;
-  mainChart.subscribeCrosshairMove(param => {
-    if (xhairLock) return;
-    if (!param.time) { cdurChart.clearCrosshairPosition(); return; }
-    xhairLock = true;
-    cdurChart.setCrosshairPosition(courtMap.get(param.time) ?? 50, param.time, cdurCourtSeries);
-    xhairLock = false;
-  });
-  cdurChart.subscribeCrosshairMove(param => {
-    if (xhairLock) return;
-    if (!param.time) { mainChart.clearCrosshairPosition(); return; }
-    xhairLock = true;
-    mainChart.setCrosshairPosition(closeMap.get(param.time) ?? 0, param.time, candleSeries);
-    xhairLock = false;
-  });
-
-  // ── Apply all indicators ───────────────────────────────────────────────────
-  function applyData(data, dispStart) {
-    dispStart = dispStart ?? DISPLAY_START;
-    const disp = dispStart ? data.filter(c => c.time >= dispStart) : data;
-    const { cs, vs } = toChartData(disp);
-    candleSeries.setData(cs);
-    volumeSeries.setData(vs);
-    if (MARKERS.length) candleSeries.setMarkers(MARKERS);
-    const clip = (arr) => dispStart ? arr.filter(p => p.time >= dispStart) : arr;
-    sma10.setData(clip(calcSMA(data, 10)));
-    sma30.setData(clip(calcSMA(data, 30)));
-    sma50.setData(clip(calcSMA(data, 50)));
-    const b20 = calcBB(data, 20, 2);
-    bb20U.setData(clip(b20.upper)); bb20M.setData(clip(b20.middle)); bb20L.setData(clip(b20.lower));
-    const b200 = calcBB(data, 200, 2);
-    bb200U.setData(clip(b200.upper)); bb200M.setData(clip(b200.middle)); bb200L.setData(clip(b200.lower));
-    const piv = calcPivots(data, currentTf);
-    const iSec = TF_SECS[currentTf] ?? 3600;
-    const lastCandle = disp.length ? disp[disp.length - 1] : null;
-    const futureT = (lastCandle ? lastCandle.time : 0) + 5 * iSec;
-    const mkSeg = arr => {
-      if (!arr.length) return [];
-      const last = arr[arr.length - 1];
-      return [{time: last.time, value: last.value}, {time: futureT, value: last.value}];
+// === WEBSOCKET ===
+function connectWS() {
+  if (ws) try { ws.close(); } catch(e) {}
+  try {
+    ws = new WebSocket('wss://api.hyperliquid.xyz/ws');
+    ws.onopen = () => {
+      document.getElementById('wsDot').className='ws-dot on';
+      document.getElementById('wsStatus').textContent='Connecte';
+      ws.send(JSON.stringify({method:'subscribe',subscription:{type:'allMids',coin:activeCoin}}));
     };
-    pivPP.setData(mkSeg(piv.PP)); pivR1.setData(mkSeg(piv.R1)); pivR2.setData(mkSeg(piv.R2)); pivR3.setData(mkSeg(piv.R3));
-    pivS1.setData(mkSeg(piv.S1)); pivS2.setData(mkSeg(piv.S2)); pivS3.setData(mkSeg(piv.S3));
-    const times = data.map(c => c.time);
-    const toPts = vals => vals
-      .map((v, i) => (v !== null && !isNaN(v) && times[i] >= dispStart) ? { time: times[i], value: v } : null)
-      .filter(Boolean);
-    const courtPts = toPts(calcCDURCourt(data));
-    const longPts  = toPts(calcCDURLong(data));
-    cdurCourtSeries.setData(courtPts);
-    cdurLongSeries.setData(longPts);
-    closeMap = new Map(cs.map(c => [c.time, c.close]));
-    courtMap = new Map(courtPts.map(p => [p.time, p.value]));
-  }
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg.channel === 'allMids' && msg.data?.mids?.[activeCoin]) {
+          const mid = parseFloat(msg.data.mids[activeCoin]);
+          if (mid && currentCandles.length > 0) {
+            const last = currentCandles[currentCandles.length-1];
+            const sec = (TF_CFG[activeTF]||{}).sec || 14400;
+            const ct = Math.floor(Date.now()/1000/sec)*sec;
+            if (last.t === ct) {
+              candleSeries.update({time:last.t, open:last.o, high:Math.max(last.h,mid), low:Math.min(last.l,mid), close:mid});
+            }
+          }
+        }
+      } catch(e) {}
+    };
+    ws.onclose = () => {
+      document.getElementById('wsDot').className='ws-dot off';
+      document.getElementById('wsStatus').textContent='Reconnexion...';
+      setTimeout(connectWS, 3000);
+    };
+  } catch(e) { setTimeout(connectWS, 5000); }
+}
 
-  // Initial render — instant, no network wait
-  // Données live chargées au démarrage via refresh() — pas de données embarquées
-  // Premier rendu déclenché par refresh() plus bas (données live)
+// === INIT ===
+async function init() {
+  buildCoinList();
+  buildCharts();
+  await loadCoin("BTC", "4h");
+  document.getElementById('ttlBadge').textContent = new Date().toLocaleString('fr-FR') + ' UTC+2';
+}
 
-  async function refresh() {
-    const statusEl = document.getElementById('hud-status');
-    try {
-      const endMs = Date.now();
-      const wms = warmupMs(currentTf);
-      const startMs = endMs - currentHoursMs - wms;
-      const dispStart = Math.floor((endMs - currentHoursMs) / 1000);
-      const resp = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'candleSnapshot', req: { coin: currentCoin, interval: currentTf, startTime: startMs, endTime: endMs } }),
-      });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      const raw = await resp.json();
-      const data = (raw || [])
-        .filter(c => c && c.t != null)
-        .map(c => ({ time: Math.floor(Number(c.t) / 1000), open: +c.o, high: +c.h, low: +c.l, close: +c.c, volume: +c.v }))
-        .filter(c => !isNaN(c.open))
-        .sort((a, b) => a.time - b.time);
-      applyData(data, dispStart);
-      if (!window._firstFit) {
-        mainChart.timeScale().fitContent();
-        cdurChart.timeScale().fitContent();
-        window._firstFit = true;
-      }
-      const now = new Date().toLocaleTimeString();
-      statusEl.textContent = (data.filter(c => c.time >= dispStart).length) + ' candles · updated ' + now;
-      statusEl.className = '';
-    } catch(e) {
-      statusEl.textContent = 'Refresh error: ' + e.message;
-      statusEl.className = 'error';
-    }
-  }
-
-  // ── Asset picker ──────────────────────────────────────────────────────────
-  let allAssets = []; // [{display, coin, tag}]
-  const assetInput = document.getElementById('asset-input');
-  const assetDropdown = document.getElementById('asset-dropdown');
-  const H = {'Content-Type':'application/json'};
-
-  async function loadAssets() {
-    assetDropdown.innerHTML = '<div class="asset-item" style="color:#787b86">Loading…</div>';
-    try {
-      // Step 1 — fetch main perps + spot + DEX list in parallel
-      const [mainR, spotR, dexR] = await Promise.all([
-        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'meta'})}),
-        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'spotMeta'})}),
-        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'perpDexs'})}).catch(()=>null),
-      ]);
-      const mainD = await mainR.json();
-      const spotD = await spotR.json();
-      const dexList = (dexR && dexR.ok) ? await dexR.json().catch(()=>[]) : [];
-
-      const mainPerps = (mainD?.universe ?? []).map(a => ({display:a.name, coin:a.name, tag:''}));
-
-      // Step 2 — fetch each named DEX meta in parallel
-      const namedDexes = Array.isArray(dexList) ? dexList.filter(d => d && d.name) : [];
-      const dexMetas = await Promise.all(namedDexes.map(d =>
-        fetch(API_URL, {method:'POST',headers:H,body:JSON.stringify({type:'meta',dex:d.name})})
-          .then(r => r.json())
-          .then(m => (m?.universe ?? []).map(a => ({display:a.name, coin:a.name, tag:d.name})))
-          .catch(() => [])
-      ));
-
-      // Step 3 — spot (coin = @N format)
-      const spots = (spotD?.universe ?? []).map((u, i) => ({
-        display: u.name, coin: '@' + (u.index ?? i), tag: 'spot',
-      }));
-
-      // Merge & dedup by coin, then sort
-      const seen = new Set();
-      allAssets = [...mainPerps, ...dexMetas.flat(), ...spots].filter(a => {
-        if (seen.has(a.coin)) return false;
-        seen.add(a.coin); return true;
-      }).sort((a, b) => a.display.localeCompare(b.display));
-
-    } catch(e) {
-      allAssets = [{display:currentCoin, coin:currentCoin, tag:''}];
-    }
-    renderDropdown('');
-  }
-
-  function renderDropdown(q) {
-    const lq = q.toLowerCase();
-    const items = q ? allAssets.filter(a => a.display.toLowerCase().includes(lq)) : allAssets;
-    if (!items.length) { assetDropdown.innerHTML = '<div class="asset-item" style="color:#787b86">No match</div>'; return; }
-    assetDropdown.innerHTML = items.map(a => {
-      const badge = a.tag ? ` <span style="color:#444;font-size:9px">${a.tag}</span>` : '';
-      return `<div class="asset-item${a.coin===currentCoin?' cur':''}" data-coin="${a.coin}" data-display="${a.display}">${a.display}${badge}</div>`;
-    }).join('');
-    assetDropdown.querySelectorAll('.asset-item[data-coin]').forEach(el =>
-      el.addEventListener('click', () => selectAsset(el.dataset.coin, el.dataset.display))
-    );
-  }
-
-  function syncUrl() {
-    const u = new URL(window.location);
-    u.searchParams.set('coin', currentCoin);
-    u.searchParams.set('tf', currentTf);
-    window.history.replaceState(null, '', u);
-  }
-
-  function selectAsset(coin, display) {
-    currentCoin = coin;
-    assetInput.value = display ?? coin;
-    assetDropdown.style.display = 'none';
-    document.title = (display ?? coin) + ' · ' + currentTf;
-    syncUrl();
-    clearInterval(autoRefresh);
-    refresh();
-    autoRefresh = setInterval(refresh, TF_REFRESH[currentTf] ?? REFRESH_MS);
-  }
-
-  const curDisplay = () => (allAssets.find(a => a.coin === currentCoin) || {display:currentCoin}).display;
-  assetInput.addEventListener('focus', () => {
-    renderDropdown(assetInput.value === curDisplay() ? '' : assetInput.value);
-    assetDropdown.style.display = 'block';
-    setTimeout(() => { const el = assetDropdown.querySelector('.cur'); if (el) el.scrollIntoView({block:'nearest'}); }, 0);
-  });
-  assetInput.addEventListener('input', () => {
-    renderDropdown(assetInput.value);
-    assetDropdown.style.display = 'block';
-  });
-  assetInput.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { assetDropdown.style.display = 'none'; assetInput.value = curDisplay(); }
-    if (e.key === 'Enter') {
-      const first = assetDropdown.querySelector('.asset-item[data-coin]');
-      if (first) selectAsset(first.dataset.coin, first.dataset.display);
-    }
-  });
-  document.addEventListener('click', e => {
-    if (!e.target.closest('#asset-picker')) assetDropdown.style.display = 'none';
-  });
-
-  loadAssets();
-
-  // Toolbar
-  document.querySelectorAll('.tf-btn').forEach(b => {
-    if (b.dataset.tf === currentTf) b.classList.add('active');
-    b.addEventListener('click', () => {
-      currentTf = b.dataset.tf;
-      currentHoursMs = TF_DEFAULT_HOURS_MS[currentTf] ?? HOURS_MS;
-      document.querySelectorAll('.tf-btn').forEach(x => x.classList.toggle('active', x.dataset.tf === currentTf));
-      document.title = currentCoin + ' · ' + currentTf;
-      syncUrl();
-      clearInterval(autoRefresh);
-      refresh();
-      autoRefresh = setInterval(refresh, TF_REFRESH[currentTf] ?? REFRESH_MS);
-    });
-  });
-
-  refresh();
-  let autoRefresh = setInterval(refresh, REFRESH_MS);
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
